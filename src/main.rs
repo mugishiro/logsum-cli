@@ -1,53 +1,71 @@
 use std::env;
 use std::fs;
 
-fn main() {
-    let mut args: Vec<String> = env::args().collect();
+const USAGE: &str = "Usage: logsum <path> [status|path]";
+
+fn parse_args(args: &[String]) -> Result<(&str, &str), &'static str> {
     if args.len() != 2 && args.len() != 3 {
-        eprintln!("Usage: logsum <path> [status|path]");
-        return;
-    }
-    if args.len() == 2 {
-        args.push("status".to_string());
-    }
-    if args[2] != "status" && args[2] != "path" {
-        eprintln!("Usage: logsum <path> [status|path]");
-        return;
+        return Err(USAGE);
     }
 
-    let path = &args[1];
-    let by = &args[2];
+    let path = args[1].as_str();
+    let by = if args.len() == 3 {
+        args[2].as_str()
+    } else {
+        "status"
+    };
 
+    if by != "status" && by != "path" {
+        return Err(USAGE);
+    }
+
+    Ok((path, by))
+}
+
+fn parse_line(line: &str, by: &str) -> Option<String> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+
+    if parts.len() != 4 {
+        return None;
+    }
+    if !parts[3].chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+
+    let key = if by == "status" { parts[3] } else { parts[2] };
+
+    Some(key.to_string())
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let (path, by) = match parse_args(&args) {
+        Ok(v) => v,
+        Err(msg) => {
+            eprintln!("{}", msg);
+            return;
+        }
+    };
     let mut counts: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     let mut skipped = 0;
 
     match fs::read_to_string(path) {
         Ok(content) => {
             for line in content.lines() {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-
-                if parts.len() != 4 {
-                    skipped += 1;
-                    continue;
-                }
-                if !parts[3].chars().all(|c| c.is_ascii_digit()) {
-                    skipped += 1;
-                    continue;
-                }
-
-                let key = if by == "status" {
-                    parts[3].to_string()
+                if let Some(key) = parse_line(line, by) {
+                    *counts.entry(key).or_insert(0) += 1;
                 } else {
-                    parts[2].to_string()
-                };
-
-                *counts.entry(key).or_insert(0) += 1;
+                    skipped += 1;
+                }
             }
 
-            for (key, count) in counts {
-                println!("{}: {}", key, count);
+            let mut items: Vec<(String, u32)> = counts.into_iter().collect();
+            items.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+            for (key, count) in items {
+                println!("{} {}", key, count);
             }
-            println!("skipped: {}", skipped);
+            println!("skipped {}", skipped);
         }
         Err(e) => eprintln!("error: could not read file {}: {}", path, e),
     }
