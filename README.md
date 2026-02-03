@@ -1,58 +1,95 @@
 # logsum-cli
 
-アクセスログを集計する小さなCLIツール。
+A small CLI tool to summarize access logs.
 
-## 目的
-ログファイルを `status` または `path` で集計する。
+## What it does
+- Summarizes logs by `status` or `path`
+- Sorts by count descending, then key ascending
+- Counts invalid lines and prints `skipped N` at the end
 
-ログ形式の例:
+## Usage
+```
+logsum <path> [status|path]
+```
+
+- `<path>`: log file path (required)
+- If omitted, it defaults to `status`
+
+### Examples
+```
+# Default is status
+logsum access.log
+
+# Explicit status
+logsum access.log status
+
+# Path summary
+logsum access.log path
+```
+
+## Input format
+Line format:
+```
+[YYYY-MM-DD] METHOD PATH STATUS
+```
+
+Example:
 ```
 [2026-01-31] GET /index.html 200
 [2026-01-31] POST /login 302
 ```
 
-## 想定CLI
+Path example (the `path` key):
 ```
-logsum <path> --by status
-logsum <path> --by path
+/index.html
 ```
 
-## 仕様（最小）
-- 入力1行の形式: `[YYYY-MM-DD] METHOD PATH STATUS`
-- 集計対象: `--by status` または `--by path`
-- 出力形式: `KEY COUNT`（例: `200 15`, `/login 3`）
-- 不正行の扱い: 基本はスキップ（後で厳密化する）
+### Input rules
+- Extra spaces or tabs are allowed
+- `PATH` does not contain spaces
+- `STATUS` is numeric only
+- Lines that don't match are treated as invalid and skipped
 
-## 1週間プラン（1日30分）
+## Output format
+```
+KEY COUNT
+...
+skipped N
+```
 
-Day 1
-- A (20分): 仕様決め + サンプルログ作成 + `cargo run` 骨組み確認
-- C (10分): 文字列分割の基礎（`split`, `split_whitespace`）
+- `KEY` is the `status` or `path`
+- `COUNT` is the number of occurrences
+- Order: count descending, key ascending
+- `skipped N` is the number of invalid lines
 
-Day 2
-- A (20分): 1行パーサを作る（status + path）
-- C (10分): `Option` / `Result` の小問題
+## Output example
+Sample log `access.log`:
+```
+[2026-01-31] GET /index.html 200
+[2026-01-31] POST /login 302
+[2026-01-31] GET /index.html 200
+[2026-01-31] GET /help 404
+bad line
+```
 
-Day 3
-- A (20分): `HashMap` で集計（status or path）
-- C (10分): `HashMap` の追加・更新・走査の練習
+```
+logsum access.log
+```
+Output:
+```
+200 2
+302 1
+404 1
+skipped 1
+```
 
-Day 4
-- A (20分): CLI引数の解析（`--by status|path`）
-- C (10分): `std::env::args` のミニ練習
-
-Day 5
-- A (20分): 件数で降順ソートして表示
-- C (10分): `sort_by_key` の練習
-
-Day 6
-- A (20分): エラーハンドリング + 不正行のスキップ
-- C (10分): `Result` の伝播練習
-
-Day 7
-- A (20分): README + 使い方 + サンプルログ
-- C (10分): 復習（過去の練習を1つ解き直す）
-
-## メモ
-- 関数は小さく、テストしやすく。
-- 時間が足りない日は A または C のどちらかだけ進め、残りは翌日に回す。
+```
+logsum access.log path
+```
+Output:
+```
+/index.html 2
+/help 1
+/login 1
+skipped 1
+```
